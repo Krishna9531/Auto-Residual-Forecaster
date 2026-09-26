@@ -1,0 +1,59 @@
+# ========================
+# Python .gitignore
+# ========================
+
+# ---------- Virtual Environments ----------
+venv/
+.venv/
+env/
+ENV/
+
+# ---------- Environment Variables ----------
+.env
+.env.*
+
+# ---------- Byte-compiled / Cache ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# ---------- Distribution / Packaging ----------
+build/
+dist/
+*.egg-info/
+*.egg
+
+# ---------- Data Files (large) ----------
+data/*.csv
+data/*.parquet
+data/*.xlsx
+data/*.h5
+data/*.hdf5
+data/*.feather
+
+# ---------- Model Binaries ----------
+# NOTE: models/residual_model.json is INTENTIONALLY tracked
+#       because the Streamlit app loads it at runtime.
+#       Only ignore other heavy model formats:
+*.pkl
+*.pickle
+*.h5
+*.pt
+*.pth
+*.onnx
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+
+# ---------- OS Artifacts ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- IDE / Editor ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
