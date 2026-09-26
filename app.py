@@ -1,6 +1,6 @@
 """
-app.py — Dynamic Residual Value Forecaster Dashboard
-=====================================================
+app.py — Auto Residual Forecaster Dashboard
+============================================
 Interactive Streamlit dashboard for vehicle residual-value predictions
 with macroeconomic shock analysis and forward depreciation curves.
 """
@@ -11,6 +11,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from xgboost import XGBRegressor
+from sklearn.model_selection import train_test_split
 
 # ---------------------------------------------------------------------------
 # Page configuration
@@ -43,14 +44,66 @@ DEFAULT_MSRP = {
 BASELINE_MACRO = {"cpi_inflation": 3.0, "interest_rate": 4.5, "gas_price": 3.50}
 
 # ---------------------------------------------------------------------------
-# Load model (cached)
+# Train a fresh model (used as fallback if model file is missing/corrupt)
+# ---------------------------------------------------------------------------
+def _train_fresh_model():
+    """Simulate data and train XGBoost — used when model file unavailable."""
+    np.random.seed(42)
+    N = 15_000
+    BRANDS = {
+        "Toyota":  {"models": ["Camry","Corolla","RAV4","Highlander"], "msrp_range":(25000,50000), "retention":0.88},
+        "Honda":   {"models": ["Civic","Accord","CR-V","Pilot"],       "msrp_range":(24000,48000), "retention":0.86},
+        "Ford":    {"models": ["F-150","Explorer","Escape","Mustang"],  "msrp_range":(28000,65000), "retention":0.78},
+        "BMW":     {"models": ["3 Series","5 Series","X3","X5"],        "msrp_range":(42000,85000), "retention":0.72},
+        "Tesla":   {"models": ["Model 3","Model Y","Model S","Model X"],"msrp_range":(40000,100000),"retention":0.80},
+    }
+    records = []
+    for _ in range(N):
+        brand = np.random.choice(list(BRANDS.keys()))
+        info  = BRANDS[brand]
+        mdl_  = np.random.choice(info["models"])
+        msrp_ = np.random.uniform(*info["msrp_range"])
+        age_  = np.random.uniform(0.5, 12)
+        mil_  = max(age_ * np.random.uniform(8000,18000) + np.random.normal(0,3000), 500)
+        cpi_  = np.random.uniform(1.0, 9.0)
+        rate_ = np.random.uniform(2.0, 8.0)
+        gas_  = np.random.uniform(2.0, 6.0)
+        base_ = msrp_ * (info["retention"] ** age_)
+        excess= max(0, mil_ - age_ * 12000)
+        mil_p = max(1 - 0.03*(excess/10000), 0.70)
+        infl_ = 1 + 0.008*(cpi_ - 3.0)
+        int_  = 1 - 0.012*(rate_ - 4.5)
+        gas_e = (1 + 0.025*(gas_-3.5)) if brand=="Tesla" else (1 - 0.015*(gas_-3.5)) if brand=="Ford" else 1.0
+        rv_   = base_ * mil_p * infl_ * int_ * gas_e * np.random.uniform(0.95,1.05)
+        records.append({"make":brand,"model":mdl_,"msrp":msrp_,"age_years":age_,
+                        "mileage":mil_,"cpi_inflation":cpi_,"interest_rate":rate_,
+                        "gas_price":gas_,"residual_value":max(rv_,1000)})
+    df = pd.DataFrame(records)
+    df["make"]  = df["make"].astype("category")
+    df["model"] = df["model"].astype("category")
+    FEATURES = ["make","model","msrp","age_years","mileage","cpi_inflation","interest_rate","gas_price"]
+    X, y = df[FEATURES], df["residual_value"]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    mdl = XGBRegressor(n_estimators=500, max_depth=7, learning_rate=0.05,
+                       subsample=0.8, colsample_bytree=0.8,
+                       tree_method="hist", enable_categorical=True, random_state=42)
+    mdl.fit(X_train, y_train)
+    return mdl
+
+
+# ---------------------------------------------------------------------------
+# Load model (cached) — falls back to training if file missing or corrupt
 # ---------------------------------------------------------------------------
 @st.cache_resource
 def load_model():
     model_path = os.path.join(os.path.dirname(__file__), "models", "residual_model.json")
-    mdl = XGBRegressor()
-    mdl.load_model(model_path)
-    return mdl
+    try:
+        mdl = XGBRegressor()
+        mdl.load_model(model_path)
+        return mdl
+    except Exception:
+        # Model file absent or version-incompatible — train fresh
+        return _train_fresh_model()
 
 
 model = load_model()
