@@ -49,7 +49,7 @@ BASELINE_MACRO = {"cpi_inflation": 3.0, "interest_rate": 4.5, "gas_price": 3.50}
 def _train_fresh_model():
     """Simulate data and train XGBoost — used when model file unavailable."""
     np.random.seed(42)
-    N = 15_000
+    N = 2_000  # Reduced from 15k to prevent freezing on Streamlit Cloud
     BRANDS = {
         "Toyota":  {"models": ["Camry","Corolla","RAV4","Highlander"], "msrp_range":(25000,50000), "retention":0.88},
         "Honda":   {"models": ["Civic","Accord","CR-V","Pilot"],       "msrp_range":(24000,48000), "retention":0.86},
@@ -84,7 +84,9 @@ def _train_fresh_model():
     FEATURES = ["make","model","msrp","age_years","mileage","cpi_inflation","interest_rate","gas_price"]
     X, y = df[FEATURES], df["residual_value"]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    mdl = XGBRegressor(n_estimators=500, max_depth=7, learning_rate=0.05,
+    
+    # Dramatically lighter model for cloud fallback
+    mdl = XGBRegressor(n_estimators=50, max_depth=4, learning_rate=0.1,
                        subsample=0.8, colsample_bytree=0.8,
                        tree_method="hist", enable_categorical=True, random_state=42)
     mdl.fit(X_train, y_train)
